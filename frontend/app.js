@@ -47,6 +47,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initModal();
     initReadOnlyProvider();
     waitForPelagus();
+    // Check DataHaven backend status on load
+    checkDataHavenHealth().then(h => {
+        if (h && h.sdkReady) console.log('✅ DataHaven network is live');
+        else console.log('⚠️ DataHaven using local fallback');
+    });
 });
 
 function waitForPelagus() {
@@ -273,10 +278,10 @@ async function loadDashboard() {
 
         for (const typeHash of types) {
             try {
-                const [hash, cid, authority, timestamp, rev, version] = await contract.getCredential(connectedAddress, typeHash);
+                const [hash, dataHavenId, authority, timestamp, rev, version] = await contract.getCredential(connectedAddress, typeHash);
                 const typeName = resolveTypeName(typeHash);
                 rev ? revoked++ : valid++;
-                cards.push({ typeHash, hash, cid, authority, timestamp, revoked: rev, version, typeName });
+                cards.push({ typeHash, hash, dataHavenId, authority, timestamp, revoked: rev, version, typeName });
             } catch (e) { console.warn('Skip type', typeHash); }
         }
 
@@ -329,8 +334,8 @@ async function showCredentialDetail(user, typeHash, typeName) {
     openModal('<div style="text-align:center"><span class="spinner"></span><p style="margin-top:12px">Loading...</p></div>');
 
     try {
-        const [hash, cid, authority, timestamp, revoked, version] = await c.getCredential(user, typeHash);
-        const [hashes, cids, timestamps, auths] = await c.getCredentialHistory(user, typeHash);
+        const [hash, dataHavenId, authority, timestamp, revoked, version] = await c.getCredential(user, typeHash);
+        const [hashes, dataHavenIds, timestamps, auths] = await c.getCredentialHistory(user, typeHash);
 
         let revHtml = '';
         if (revoked) {
@@ -354,7 +359,7 @@ async function showCredentialDetail(user, typeHash, typeName) {
                 <div class="history-item ${isLatest && !revoked ? 'active' : 'past'}">
                     <div class="hi-version">Version ${i + 1} ${statusLabel}</div>
                     <div class="hi-hash">Hash: ${h}</div>
-                    <div class="hi-cid">IPFS: ${formatCidDisplay(cids[i])}</div>
+                    <div class="hi-dhid">DataHaven: ${formatDataHavenDisplay(dataHavenIds[i])}</div>
                     <div class="hi-time">${formatTimestamp(timestamps[i])} • Signed by Authority</div>
                 </div>
             `;
@@ -362,7 +367,7 @@ async function showCredentialDetail(user, typeHash, typeName) {
 
         const histHtml = `<div class="history-timeline">${historyItems}</div>`;
 
-        const ipfsLink = isValidCid(cid) ? ` <a href="${IPFS_GATEWAY + cid}" target="_blank" class="ipfs-link">📦 View on IPFS →</a>` : '';
+        const dataHavenLink = isValidDataHavenId(dataHavenId) ? ` <a href="http://localhost:3001/api/datahaven/retrieve/${dataHavenId}" target="_blank" class="ipfs-link">📦 View DataHaven →</a>` : '';
 
         openModal(`
             <h2>${getTypeIcon(typeName)} ${typeName}</h2>
@@ -370,7 +375,7 @@ async function showCredentialDetail(user, typeHash, typeName) {
                 <span class="result-label">Status</span><span class="result-value"><span class="badge ${revoked ? 'badge-red' : 'badge-green'}">${revoked ? 'Revoked' : 'Valid'}</span></span>
                 <span class="result-label">Version</span><span class="result-value">${version.toString()}</span>
                 <span class="result-label">Hash</span><span class="result-value">${hash}</span>
-                <span class="result-label">IPFS</span><span class="result-value">${formatCidDisplay(cid)}${ipfsLink}</span>
+                <span class="result-label">DataHaven ID</span><span class="result-value">${formatDataHavenDisplay(dataHavenId)}${dataHavenLink}</span>
                 <span class="result-label">Authority</span><span class="result-value">${authority}</span>
                 <span class="result-label">Updated</span><span class="result-value">${formatTimestamp(timestamp)}</span>
             </div>
@@ -559,29 +564,30 @@ async function handleAcceptRequest(reqId) {
 
         let tx;
         if (req.action === 'issue') {
-            // Try to pin data to IPFS first
-            let ipfsCid = 'none';
+            // Store data in DataHaven
+            let dataHavenId = 'none';
             try {
                 const parsed = JSON.parse(req.rawData);
-                const cid = await pinToIPFS(parsed, 'superauth_' + req.credentialType + '_' + Date.now());
-                if (cid) ipfsCid = cid;
-            } catch (e) { console.warn('IPFS pin skipped:', e.message); }
+                const id = await storeInDataHaven(parsed);
+                if (id) dataHavenId = id;
+            } catch (e) { console.warn('DataHaven store skipped:', e.message); }
+
 
             tx = await contract.issueCredentialV2(
-                req.requester, credentialTypeHash, credentialHash, ipfsCid,
+                req.requester, credentialTypeHash, credentialHash, dataHavenId,
                 sig.v, sig.r, sig.s
             );
         } else {
             // Modify/update existing
-            let newCid = 'none';
+            let newDataHavenId = 'none';
             try {
                 const parsed = JSON.parse(req.rawData);
-                const cid = await pinToIPFS(parsed, 'superauth_update_' + Date.now());
-                if (cid) newCid = cid;
-            } catch (e) { console.warn('IPFS pin skipped:', e.message); }
+                const id = await storeInDataHaven(parsed);
+                if (id) newDataHavenId = id;
+            } catch (e) { console.warn('DataHaven store skipped:', e.message); }
 
             tx = await contract.updateCredential(
-                req.requester, credentialTypeHash, credentialHash, newCid,
+                req.requester, credentialTypeHash, credentialHash, newDataHavenId,
                 sig.v, sig.r, sig.s
             );
         }
@@ -645,14 +651,14 @@ async function handleManageLookup() {
 
     try {
         const typeHash = ethers.keccak256(ethers.toUtf8Bytes(typeVal));
-        const [hash, cid, authority, timestamp, revoked, version] = await contract.getCredential(user, typeHash);
+        const [hash, dataHavenId, authority, timestamp, revoked, version] = await contract.getCredential(user, typeHash);
 
         resultDiv.innerHTML = `<div class="manage-result" style="margin-bottom:0;">
             <div class="result-grid">
                 <span class="result-label">Status</span><span class="result-value"><span class="badge ${revoked ? 'badge-red' : 'badge-green'}">${revoked ? 'Revoked' : 'Valid'}</span></span>
                 <span class="result-label">Version</span><span class="result-value">${version.toString()}</span>
                 <span class="result-label">Hash</span><span class="result-value">${hash}</span>
-                <span class="result-label">IPFS</span><span class="result-value">${formatCidDisplay(cid)}</span>
+                <span class="result-label">DataHaven ID</span><span class="result-value">${formatDataHavenDisplay(dataHavenId)}</span>
                 <span class="result-label">Authority</span><span class="result-value">${authority}</span>
                 <span class="result-label">Updated</span><span class="result-value">${formatTimestamp(timestamp)}</span>
             </div></div>`;
@@ -674,7 +680,7 @@ async function handleIssue() {
     const user = document.getElementById('issue-user').value.trim();
     const typeVal = document.getElementById('issue-type').value;
     const dataStr = document.getElementById('issue-data').value.trim();
-    const ipfsCid = document.getElementById('issue-ipfs').value.trim() || 'none';
+    const dataHavenId = document.getElementById('issue-datahaven').value.trim() || 'none';
 
     if (!user || user.length < 10) { showToast('Invalid address', 'error'); return; }
     if (!dataStr) { showToast('Enter data', 'error'); return; }
@@ -693,14 +699,27 @@ async function handleIssue() {
         const flatSig = await signer.signMessage(ethers.getBytes(msgHash));
         const sig = ethers.Signature.from(flatSig);
 
-        const tx = await contract.issueCredentialV2(user, typeHash, credHash, ipfsCid, sig.v, sig.r, sig.s);
+        // Auto-store in DataHaven if user didn't manually store
+        let finalDataHavenId = dataHavenId;
+        if (finalDataHavenId === 'none') {
+            try {
+                const parsed = JSON.parse(dataStr);
+                const id = await storeInDataHaven(parsed);
+                if (id) {
+                    finalDataHavenId = id;
+                    document.getElementById('issue-datahaven').value = id;
+                }
+            } catch (e) { console.warn('Auto DataHaven store skipped:', e.message); }
+        }
+
+        const tx = await contract.issueCredentialV2(user, typeHash, credHash, finalDataHavenId, sig.v, sig.r, sig.s);
         showToast('Tx sent: ' + tx.hash.slice(0, 14) + '...', 'info');
         await tx.wait();
         showToast('Credential issued!', 'success');
 
         document.getElementById('issue-user').value = '';
         document.getElementById('issue-data').value = '';
-        document.getElementById('issue-ipfs').value = '';
+        document.getElementById('issue-datahaven').value = '';
     } catch (err) {
         showToast('Issue failed: ' + (err.reason || err.message), 'error');
     } finally {
@@ -715,7 +734,7 @@ async function handleUpdate() {
     const user = document.getElementById('manage-user').value.trim();
     const typeVal = document.getElementById('manage-type').value;
     const dataStr = document.getElementById('update-data').value.trim();
-    const newCid = document.getElementById('update-ipfs').value.trim() || 'none';
+    const newDataHavenId = document.getElementById('update-datahaven').value.trim() || 'none';
 
     if (!dataStr) { showToast('Enter new data', 'error'); return; }
     try { JSON.parse(dataStr); } catch { showToast('Invalid JSON', 'error'); return; }
@@ -733,7 +752,20 @@ async function handleUpdate() {
         const flatSig = await signer.signMessage(ethers.getBytes(msgHash));
         const sig = ethers.Signature.from(flatSig);
 
-        const tx = await contract.updateCredential(user, typeHash, newHash, newCid, sig.v, sig.r, sig.s);
+        // Auto-store in DataHaven if user didn't manually store
+        let finalDataHavenId = newDataHavenId;
+        if (finalDataHavenId === 'none') {
+            try {
+                const parsed = JSON.parse(dataStr);
+                const id = await storeInDataHaven(parsed);
+                if (id) {
+                    finalDataHavenId = id;
+                    document.getElementById('update-datahaven').value = id;
+                }
+            } catch (e) { console.warn('Auto DataHaven store skipped:', e.message); }
+        }
+
+        const tx = await contract.updateCredential(user, typeHash, newHash, finalDataHavenId, sig.v, sig.r, sig.s);
         showToast('Tx sent: ' + tx.hash.slice(0, 14) + '...', 'info');
         await tx.wait();
         showToast('Credential updated!', 'success');
@@ -870,15 +902,15 @@ async function handleVerify() {
             return;
         }
 
-        const [hash, cid, authority, timestamp, , version] = await c.getCredential(user, typeHash);
-        const [hashes, cids, timestamps, auths] = await c.getCredentialHistory(user, typeHash);
+        const [hash, dataHavenId, authority, timestamp, , version] = await c.getCredential(user, typeHash);
+        const [hashes, dataHavenIds, timestamps, auths] = await c.getCredentialHistory(user, typeHash);
 
         let histHtml = '<div class="history-timeline">';
         for (let i = hashes.length - 1; i >= 0; i--) {
             histHtml += `<div class="history-item">
                 <div class="hi-version">v${i + 1} ${i === hashes.length - 1 ? '<span class="badge badge-indigo">Latest</span>' : ''}</div>
                 <div class="hi-hash">Hash: ${hashes[i]}</div>
-                <div class="hi-cid">IPFS: ${formatCidDisplay(cids[i])}</div>
+                <div class="hi-dhid">DataHaven: ${formatDataHavenDisplay(dataHavenIds[i])}</div>
                 <div class="hi-time">${formatTimestamp(timestamps[i])}</div>
             </div>`;
         }
@@ -887,7 +919,7 @@ async function handleVerify() {
         resultDiv.innerHTML = `<div class="verify-card valid"><div class="verify-status"><div class="verify-status-icon valid">✓</div><div class="verify-status-text"><h3 style="color:var(--accent-green);">Credential Valid</h3><p>${typeVal} — active and verified on-chain</p></div></div>
             <div class="result-grid" style="margin-top:16px;"><span class="result-label">Version</span><span class="result-value">${version.toString()}</span>
             <span class="result-label">Hash</span><span class="result-value">${hash}</span>
-            <span class="result-label">IPFS</span><span class="result-value">${formatCidDisplay(cid)}</span>
+            <span class="result-label">DataHaven ID</span><span class="result-value">${formatDataHavenDisplay(dataHavenId)}</span>
             <span class="result-label">Authority</span><span class="result-value">${authority}</span>
             <span class="result-label">Updated</span><span class="result-value">${formatTimestamp(timestamp)}</span></div>
             <h3 style="margin-top:24px;margin-bottom:12px;">History</h3>${histHtml}</div>`;
@@ -958,50 +990,87 @@ function showToast(msg, type = 'info') {
 }
 
 // ═══════════════════════════════════════════════════════════
-// IPFS PINNING — Pinata
+// DATAHAVEN STORAGE
 // ═══════════════════════════════════════════════════════════
 
-function isValidCid(cid) {
-    if (!cid || cid === 'none' || cid === 'N/A' || cid === '') return false;
-    return (cid.startsWith('Qm') && cid.length >= 46) || cid.startsWith('bafy');
-}
-function formatCidDisplay(cid) {
-    if (isValidCid(cid)) return `<a href="${IPFS_GATEWAY}${cid}" target="_blank" style="color:var(--accent-cyan);text-decoration:underline;">${cid}</a>`;
-    return '<span style="color:var(--text-muted);">Not pinned</span>';
-}
-function getPinataJwt() { return localStorage.getItem('superauth_pinata_jwt') || ''; }
-function savePinataJwt(jwt) { localStorage.setItem('superauth_pinata_jwt', jwt); }
+let dataHavenStatus = 'unknown'; // 'online' | 'offline' | 'unknown'
 
-async function pinToIPFS(jsonData, name) {
-    const jwt = getPinataJwt();
-    if (!jwt) {
-        const userJwt = prompt('Enter your Pinata JWT to pin data to IPFS.\n\nGet a FREE key at: https://app.pinata.cloud/developers/api-keys\n(Create key → copy JWT)\n\nSaved in browser for future use.');
-        if (!userJwt) return null;
-        savePinataJwt(userJwt.trim());
-        return pinToIPFS(jsonData, name);
-    }
-    const resp = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({ pinataContent: jsonData, pinataMetadata: { name }, pinataOptions: { cidVersion: 0 } })
-    });
-    if (!resp.ok) {
-        if (resp.status === 401) { localStorage.removeItem('superauth_pinata_jwt'); throw new Error('Invalid JWT — cleared.'); }
-        throw new Error('Pinata: ' + resp.statusText);
-    }
-    return (await resp.json()).IpfsHash;
+function isValidDataHavenId(id) {
+    if (!id || id === 'none' || id === 'N/A' || id === '') return false;
+    return id.length > 10;
 }
 
-async function handleAutoPin(dataFieldId, cidFieldId) {
+function formatDataHavenDisplay(id) {
+    if (isValidDataHavenId(id)) {
+        const shortId = id.length > 12 ? id.slice(0, 8) + '…' + id.slice(-4) : id;
+        return `<a href="http://localhost:3001/api/datahaven/retrieve/${encodeURIComponent(id)}" target="_blank" style="color:var(--accent-cyan);text-decoration:underline;">${shortId}</a>`;
+    }
+    return '<span style="color:var(--text-muted);">Not stored</span>';
+}
+
+async function checkDataHavenHealth() {
+    try {
+        const resp = await fetch('http://localhost:3001/api/datahaven/health', { signal: AbortSignal.timeout(5000) });
+        if (resp.ok) {
+            const data = await resp.json();
+            dataHavenStatus = data.sdkReady ? 'online' : 'local-only';
+            console.log('DataHaven status:', dataHavenStatus, data);
+            return data;
+        }
+    } catch (e) {
+        dataHavenStatus = 'offline';
+        console.warn('DataHaven health check failed:', e.message);
+    }
+    return null;
+}
+
+async function storeInDataHaven(jsonData, retries = 2) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const resp = await fetch('http://localhost:3001/api/datahaven/store', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: jsonData }),
+                signal: AbortSignal.timeout(30000),
+            });
+            if (!resp.ok) {
+                const errBody = await resp.json().catch(() => ({}));
+                throw new Error(errBody.error || 'DataHaven store error: ' + resp.statusText);
+            }
+            const result = await resp.json();
+            if (result.storage && result.storage !== 'local-fallback') {
+                console.log(`📦 Stored via: ${result.storage}`);
+            }
+            return result.dataHavenId;
+        } catch (err) {
+            lastErr = err;
+            console.warn(`DataHaven store attempt ${attempt + 1} failed:`, err.message);
+            if (attempt < retries) {
+                // Try re-auth before retry
+                try { await fetch('http://localhost:3001/api/datahaven/reauth', { method: 'POST' }); } catch { }
+                await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+            }
+        }
+    }
+    throw lastErr;
+}
+
+async function handleAutoStore(dataFieldId, idFieldId) {
     const dataStr = document.getElementById(dataFieldId).value.trim();
     if (!dataStr) { showToast('Enter data first', 'error'); return; }
     let parsed;
     try { parsed = JSON.parse(dataStr); } catch { showToast('Invalid JSON', 'error'); return; }
-    showToast('Pinning to IPFS...', 'info');
+    showToast('Storing in DataHaven...', 'info');
     try {
-        const cid = await pinToIPFS(parsed, 'superauth_' + Date.now());
-        if (cid) { document.getElementById(cidFieldId).value = cid; showToast('Pinned! CID: ' + cid, 'success'); }
-    } catch (err) { showToast('Pin failed: ' + err.message, 'error'); }
+        const id = await storeInDataHaven(parsed);
+        if (id) {
+            document.getElementById(idFieldId).value = id;
+            showToast('Stored! ID: ' + (id.length > 20 ? id.slice(0, 12) + '…' : id), 'success');
+        } else {
+            showToast('Store returned no ID', 'error');
+        }
+    } catch (err) { showToast('Store failed: ' + err.message, 'error'); }
 }
 
 // ═══════════════════════════════════════════════════════════

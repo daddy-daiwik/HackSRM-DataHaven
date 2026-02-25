@@ -8,3 +8,6 @@ artifacts/
 cache/
 *.txt
 .DS_Store
+
+# DataHaven local credential cache (may contain PII)
+backend/datahaven_store/

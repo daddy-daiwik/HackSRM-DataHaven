@@ -5,8 +5,8 @@
  * The ABI below covers both legacy (V1) and new (V2) functions.
  */
 
-const CONTRACT_ADDRESS = '0x006A536bcc5F927AF5a58c7bBef05eab36d4C87F'; // ← Deployed 2026-02-24
-const GOVERNMENT_ADDRESS = '0x006377377C9B03a79B9DbA43ffEa362db255c243'; // ← Government wallet
+const CONTRACT_ADDRESS = '0x003Eb697e18Ae5f79DD4a939B36561b5968EcE97'; // ← Deployed 2026-02-26 (Fresh Integration)
+const GOVERNMENT_ADDRESS = '0x0035CCb9a23a257f41a9BC3a1F1bcc3a5019076D'; // ← Government wallet (deployer)
 
 const CONTRACT_ABI = [
   // ── Constructor ──
@@ -18,7 +18,7 @@ const CONTRACT_ABI = [
       { indexed: true, internalType: "address", name: "user", type: "address" },
       { indexed: true, internalType: "bytes32", name: "credentialType", type: "bytes32" },
       { indexed: false, internalType: "bytes32", name: "credentialHash", type: "bytes32" },
-      { indexed: false, internalType: "string", name: "ipfsCid", type: "string" },
+      { indexed: false, internalType: "string", name: "dataHavenId", type: "string" },
       { indexed: false, internalType: "address", name: "authority", type: "address" },
       { indexed: false, internalType: "uint256", name: "timestamp", type: "uint256" }
     ], name: "CredentialIssued", type: "event"
@@ -29,7 +29,7 @@ const CONTRACT_ABI = [
       { indexed: true, internalType: "address", name: "user", type: "address" },
       { indexed: true, internalType: "bytes32", name: "credentialType", type: "bytes32" },
       { indexed: false, internalType: "bytes32", name: "newHash", type: "bytes32" },
-      { indexed: false, internalType: "string", name: "newCid", type: "string" },
+      { indexed: false, internalType: "string", name: "newDataHavenId", type: "string" },
       { indexed: false, internalType: "bytes32", name: "previousHash", type: "bytes32" },
       { indexed: false, internalType: "uint256", name: "version", type: "uint256" },
       { indexed: false, internalType: "uint256", name: "timestamp", type: "uint256" }
@@ -80,7 +80,7 @@ const CONTRACT_ABI = [
       { internalType: "address", name: "user", type: "address" },
       { internalType: "bytes32", name: "credentialType", type: "bytes32" },
       { internalType: "bytes32", name: "credentialHash", type: "bytes32" },
-      { internalType: "string", name: "ipfsCid", type: "string" },
+      { internalType: "string", name: "dataHavenId", type: "string" },
       { internalType: "uint8", name: "v", type: "uint8" },
       { internalType: "bytes32", name: "r", type: "bytes32" },
       { internalType: "bytes32", name: "s", type: "bytes32" }
@@ -93,7 +93,7 @@ const CONTRACT_ABI = [
       { internalType: "address", name: "user", type: "address" },
       { internalType: "bytes32", name: "credentialType", type: "bytes32" },
       { internalType: "bytes32", name: "newCredentialHash", type: "bytes32" },
-      { internalType: "string", name: "newIpfsCid", type: "string" },
+      { internalType: "string", name: "newDataHavenId", type: "string" },
       { internalType: "uint8", name: "v", type: "uint8" },
       { internalType: "bytes32", name: "r", type: "bytes32" },
       { internalType: "bytes32", name: "s", type: "bytes32" }
@@ -115,7 +115,7 @@ const CONTRACT_ABI = [
     name: "getCredential",
     outputs: [
       { internalType: "bytes32", name: "credentialHash", type: "bytes32" },
-      { internalType: "string", name: "ipfsCid", type: "string" },
+      { internalType: "string", name: "dataHavenId", type: "string" },
       { internalType: "address", name: "authority", type: "address" },
       { internalType: "uint256", name: "timestamp", type: "uint256" },
       { internalType: "bool", name: "revoked", type: "bool" },
@@ -129,7 +129,7 @@ const CONTRACT_ABI = [
     name: "getLatestCredential",
     outputs: [
       { internalType: "bytes32", name: "credentialHash", type: "bytes32" },
-      { internalType: "string", name: "ipfsCid", type: "string" },
+      { internalType: "string", name: "dataHavenId", type: "string" },
       { internalType: "address", name: "authority", type: "address" },
       { internalType: "uint256", name: "timestamp", type: "uint256" },
       { internalType: "bool", name: "revoked", type: "bool" },
@@ -143,7 +143,7 @@ const CONTRACT_ABI = [
     name: "getCredentialVersion",
     outputs: [
       { internalType: "bytes32", name: "credentialHash", type: "bytes32" },
-      { internalType: "string", name: "ipfsCid", type: "string" },
+      { internalType: "string", name: "dataHavenId", type: "string" },
       { internalType: "address", name: "authority", type: "address" },
       { internalType: "uint256", name: "timestamp", type: "uint256" }
     ],
@@ -155,7 +155,7 @@ const CONTRACT_ABI = [
     name: "getCredentialHistory",
     outputs: [
       { internalType: "bytes32[]", name: "hashes", type: "bytes32[]" },
-      { internalType: "string[]", name: "cids", type: "string[]" },
+      { internalType: "string[]", name: "ids", type: "string[]" },
       { internalType: "uint256[]", name: "timestamps", type: "uint256[]" },
       { internalType: "address[]", name: "auths", type: "address[]" }
     ],
@@ -221,5 +221,5 @@ const CREDENTIAL_ICONS = {
   FINANCIAL: '🏦',
 };
 
-// IPFS gateway for viewing raw data
-const IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
+// DataHaven backend URL for viewing raw data
+const DATAHAVEN_BACKEND = 'http://localhost:3001/api/datahaven/retrieve/';

@@ -9,7 +9,7 @@ pragma solidity ^0.8.26;
  * Architecture:
  *   - Government wallet sets authorities per credential type
  *   - Authorities issue/update/revoke credentials via signature verification
- *   - Each credential stores an IPFS CID pointing to raw data
+ *   - Each credential stores a DataHaven ID pointing to raw data
  *   - Full version history is maintained on-chain
  *   - Revoked credentials remain permanently stored with reason
  */
@@ -31,7 +31,7 @@ contract SuperAuth {
     /// @notice A single version snapshot of a credential
     struct CredentialVersion {
         bytes32 credentialHash;   // keccak256 hash of the credential data
-        string  ipfsCid;         // IPFS CID pointing to raw data JSON
+        string  dataHavenId;     // DataHaven ID pointing to raw data JSON
         address authority;       // Authority that wrote this version
         uint256 timestamp;       // Block timestamp of this version
     }
@@ -64,7 +64,7 @@ contract SuperAuth {
         address indexed user,
         bytes32 indexed credentialType,
         bytes32 credentialHash,
-        string  ipfsCid,
+        string  dataHavenId,
         address authority,
         uint256 timestamp
     );
@@ -73,7 +73,7 @@ contract SuperAuth {
         address indexed user,
         bytes32 indexed credentialType,
         bytes32 newHash,
-        string  newCid,
+        string  newDataHavenId,
         bytes32 previousHash,
         uint256 version,
         uint256 timestamp
@@ -134,15 +134,15 @@ contract SuperAuth {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // NEW: ISSUE CREDENTIAL V2 (with IPFS CID + history)
+    // NEW: ISSUE CREDENTIAL V2 (with DataHaven ID + history)
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * @notice Issue a new credential with IPFS CID storage and full history tracking
+     * @notice Issue a new credential with DataHaven storage and full history tracking
      * @param user          Wallet address of the credential holder
      * @param credentialType keccak256 hash of the credential category (e.g. "PERSONAL")
      * @param credentialHash keccak256 hash of the raw credential data
-     * @param ipfsCid       IPFS CID where the raw data JSON is pinned
+     * @param dataHavenId   DataHaven ID where the raw data JSON is stored
      * @param v             Signature recovery id
      * @param r             Signature r component
      * @param s             Signature s component
@@ -151,7 +151,7 @@ contract SuperAuth {
         address user,
         bytes32 credentialType,
         bytes32 credentialHash,
-        string calldata ipfsCid,
+        string calldata dataHavenId,
         uint8 v,
         bytes32 r,
         bytes32 s
@@ -176,7 +176,7 @@ contract SuperAuth {
         record.exists = true;
         record.versions.push(CredentialVersion({
             credentialHash: credentialHash,
-            ipfsCid: ipfsCid,
+            dataHavenId: dataHavenId,
             authority: signer,
             timestamp: block.timestamp
         }));
@@ -184,7 +184,7 @@ contract SuperAuth {
         // Track credential type for user
         userCredentialTypes[user].push(credentialType);
 
-        emit CredentialIssued(user, credentialType, credentialHash, ipfsCid, signer, block.timestamp);
+        emit CredentialIssued(user, credentialType, credentialHash, dataHavenId, signer, block.timestamp);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -199,7 +199,7 @@ contract SuperAuth {
         address user,
         bytes32 credentialType,
         bytes32 newCredentialHash,
-        string calldata newIpfsCid,
+        string calldata newDataHavenId,
         uint8 v,
         bytes32 r,
         bytes32 s
@@ -227,7 +227,7 @@ contract SuperAuth {
         // Push new version
         record.versions.push(CredentialVersion({
             credentialHash: newCredentialHash,
-            ipfsCid: newIpfsCid,
+            dataHavenId: newDataHavenId,
             authority: signer,
             timestamp: block.timestamp
         }));
@@ -239,7 +239,7 @@ contract SuperAuth {
             user,
             credentialType,
             newCredentialHash,
-            newIpfsCid,
+            newDataHavenId,
             previousHash,
             record.versions.length,
             block.timestamp
@@ -289,7 +289,7 @@ contract SuperAuth {
     /**
      * @notice Get the latest version of a credential
      * @return credentialHash  Latest hash
-     * @return ipfsCid         Latest IPFS CID
+     * @return dataHavenId     Latest DataHaven ID
      * @return authority        Authority address
      * @return timestamp        Timestamp of latest version
      * @return revoked          Whether credential is revoked
@@ -300,7 +300,7 @@ contract SuperAuth {
         bytes32 credentialType
     ) public view returns (
         bytes32 credentialHash,
-        string memory ipfsCid,
+        string memory dataHavenId,
         address authority,
         uint256 timestamp,
         bool revoked,
@@ -314,7 +314,7 @@ contract SuperAuth {
 
         return (
             latest.credentialHash,
-            latest.ipfsCid,
+            latest.dataHavenId,
             latest.authority,
             latest.timestamp,
             record.revoked,
@@ -330,7 +330,7 @@ contract SuperAuth {
         bytes32 credentialType
     ) public view returns (
         bytes32 credentialHash,
-        string memory ipfsCid,
+        string memory dataHavenId,
         address authority,
         uint256 timestamp,
         bool revoked,
@@ -349,7 +349,7 @@ contract SuperAuth {
         uint256 versionIndex
     ) public view returns (
         bytes32 credentialHash,
-        string memory ipfsCid,
+        string memory dataHavenId,
         address authority,
         uint256 timestamp
     ) {
@@ -358,13 +358,13 @@ contract SuperAuth {
         require(versionIndex < record.versions.length, "Version out of range");
 
         CredentialVersion storage ver = record.versions[versionIndex];
-        return (ver.credentialHash, ver.ipfsCid, ver.authority, ver.timestamp);
+        return (ver.credentialHash, ver.dataHavenId, ver.authority, ver.timestamp);
     }
 
     /**
      * @notice Get the full history arrays for a credential
      * @return hashes     Array of all credential hashes across versions
-     * @return cids       Array of all IPFS CIDs across versions
+     * @return ids        Array of all DataHaven IDs across versions
      * @return timestamps Array of all version timestamps
      * @return auths      Array of all authority addresses per version
      */
@@ -373,7 +373,7 @@ contract SuperAuth {
         bytes32 credentialType
     ) public view returns (
         bytes32[] memory hashes,
-        string[]  memory cids,
+        string[]  memory ids,
         uint256[] memory timestamps,
         address[] memory auths
     ) {
@@ -382,13 +382,13 @@ contract SuperAuth {
 
         uint256 len = record.versions.length;
         hashes     = new bytes32[](len);
-        cids       = new string[](len);
+        ids        = new string[](len);
         timestamps = new uint256[](len);
         auths      = new address[](len);
 
         for (uint256 i = 0; i < len; i++) {
             hashes[i]     = record.versions[i].credentialHash;
-            cids[i]       = record.versions[i].ipfsCid;
+            ids[i]        = record.versions[i].dataHavenId;
             timestamps[i] = record.versions[i].timestamp;
             auths[i]      = record.versions[i].authority;
         }
