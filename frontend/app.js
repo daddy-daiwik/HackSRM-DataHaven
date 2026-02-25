@@ -379,10 +379,34 @@ async function showCredentialDetail(user, typeHash, typeName) {
                 <span class="result-label">Authority</span><span class="result-value">${authority}</span>
                 <span class="result-label">Updated</span><span class="result-value">${formatTimestamp(timestamp)}</span>
             </div>
+            <div id="modal-raw-data" style="margin-bottom:16px;"></div>
             ${revHtml}
             <h3 style="margin-top:24px;margin-bottom:12px;">Version History</h3>
             ${histHtml}
         `);
+
+        // Fetch and display raw JSON data from DataHaven
+        if (isValidDataHavenId(dataHavenId)) {
+            const rawDiv = document.getElementById('modal-raw-data');
+            rawDiv.innerHTML = '<span class="spinner" style="margin-right:8px;"></span> Loading raw data from DataHaven...';
+            try {
+                const resp = await fetch(BACKEND_BASE + '/api/datahaven/retrieve/' + encodeURIComponent(dataHavenId), { signal: AbortSignal.timeout(10000) });
+                if (resp.ok) {
+                    const result = await resp.json();
+                    if (result.success && result.data) {
+                        rawDiv.innerHTML = `
+                            <h3 style="margin-bottom:8px;">\ud83d\udce6 Raw Credential Data <span style="font-size:0.7em;color:var(--text-muted);font-weight:400;">from ${result.source || 'DataHaven'}</span></h3>
+                            <pre style="background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:8px;padding:16px;overflow-x:auto;font-size:0.85em;color:var(--accent-cyan);max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;">${JSON.stringify(result.data, null, 2)}</pre>`;
+                    } else {
+                        rawDiv.innerHTML = '<span style="color:var(--text-muted);">\u26a0 Could not parse DataHaven response</span>';
+                    }
+                } else {
+                    rawDiv.innerHTML = '<span style="color:var(--text-muted);">\u26a0 DataHaven data not found (HTTP ' + resp.status + ')</span>';
+                }
+            } catch (e) {
+                rawDiv.innerHTML = '<span style="color:var(--text-muted);">\u26a0 Could not reach DataHaven backend</span>';
+            }
+        }
     } catch (err) {
         openModal(`<h2>Error</h2><p style="color:var(--accent-red);">${err.message || err}</p>`);
     }
@@ -661,7 +685,32 @@ async function handleManageLookup() {
                 <span class="result-label">DataHaven ID</span><span class="result-value">${formatDataHavenDisplay(dataHavenId)}</span>
                 <span class="result-label">Authority</span><span class="result-value">${authority}</span>
                 <span class="result-label">Updated</span><span class="result-value">${formatTimestamp(timestamp)}</span>
-            </div></div>`;
+            </div>
+            <div id="manage-raw-data" style="margin-top:12px;"></div>
+        </div>`;
+
+        // Fetch and display raw JSON data from DataHaven
+        if (isValidDataHavenId(dataHavenId)) {
+            const rawDiv = document.getElementById('manage-raw-data');
+            rawDiv.innerHTML = '<span class="spinner" style="margin-right:8px;"></span> Loading raw data...';
+            try {
+                const resp = await fetch(BACKEND_BASE + '/api/datahaven/retrieve/' + encodeURIComponent(dataHavenId), { signal: AbortSignal.timeout(10000) });
+                if (resp.ok) {
+                    const result = await resp.json();
+                    if (result.success && result.data) {
+                        rawDiv.innerHTML = `
+                            <h4 style="margin-bottom:6px;">\ud83d\udce6 Raw Data <span style="font-size:0.75em;color:var(--text-muted);font-weight:400;">(${result.source || 'DataHaven'})</span></h4>
+                            <pre style="background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:8px;padding:12px;overflow-x:auto;font-size:0.82em;color:var(--accent-cyan);max-height:250px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;">${JSON.stringify(result.data, null, 2)}</pre>`;
+                    } else {
+                        rawDiv.innerHTML = '';
+                    }
+                } else {
+                    rawDiv.innerHTML = '';
+                }
+            } catch (e) {
+                rawDiv.innerHTML = '';
+            }
+        }
 
         if (!revoked) {
             document.getElementById('update-section').classList.remove('hidden');

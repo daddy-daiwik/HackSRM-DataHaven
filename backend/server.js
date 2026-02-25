@@ -525,20 +525,56 @@ async function retrieveFromDataHaven(fileKeyOrId) {
         try {
             result = await mspClient.files.downloadFile(fileKeyOrId);
         } catch {
-            // Try alternate download method name
             try {
                 result = await mspClient.files.download(fileKeyOrId);
             } catch {
-                // Try with bucket context
                 result = await mspClient.files.downloadFile(bucketId, fileKeyOrId);
             }
         }
 
-        // Check for HTTP error responses first (MSP returns status objects)
+        // Check for HTTP error responses
         if (result && result.status && result.status >= 400) {
             throw new Error(`MSP returned HTTP ${result.status}`);
         }
 
+        // Handle stream response: { stream: ReadableStream, status: 200, contentType: ... }
+        if (result && result.stream) {
+            console.log('Got stream response from MSP, reading...');
+            try {
+                const { Readable } = require('stream');
+                let chunks = [];
+
+                // Handle Web ReadableStream
+                if (typeof result.stream.getReader === 'function') {
+                    const reader = result.stream.getReader();
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(Buffer.from(value));
+                    }
+                }
+                // Handle Node.js Readable stream
+                else if (result.stream.on || result.stream.pipe) {
+                    const nodeStream = result.stream instanceof Readable ? result.stream : Readable.from(result.stream);
+                    for await (const chunk of nodeStream) {
+                        chunks.push(Buffer.from(chunk));
+                    }
+                }
+                // Handle body/arrayBuffer
+                else if (typeof result.stream.arrayBuffer === 'function') {
+                    const ab = await result.stream.arrayBuffer();
+                    return Buffer.from(ab).toString('utf8');
+                }
+
+                if (chunks.length > 0) {
+                    return Buffer.concat(chunks).toString('utf8');
+                }
+            } catch (streamErr) {
+                console.warn('Stream reading failed:', streamErr.message);
+            }
+        }
+
+        // Handle direct data
         if (result && result.data) {
             return typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
         }
@@ -551,7 +587,12 @@ async function retrieveFromDataHaven(fileKeyOrId) {
         if (result instanceof Blob || (result && typeof result.text === 'function')) {
             return await result.text();
         }
-        return JSON.stringify(result);
+        if (typeof result === 'string') {
+            return result;
+        }
+
+        // If we got a metadata object, don't return it as data
+        throw new Error('Unrecognized download response format');
     } catch (err) {
         console.warn(`DataHaven download failed: ${err.message}`);
         throw err;
