@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description"
+        content="SuperAuth — Decentralized credential management on Quai Network. Issue, verify, and manage credentials with IPFS and blockchain." />
+    <title>SuperAuth — Decentralized Credential Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+    <!-- ═══ BG ═══ -->
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+    <div class="bg-glow bg-glow-3"></div>
+
+    <!-- ═══ HEADER ═══ -->
+    <header id="app-header">
+        <div class="header-inner">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <rect x="2" y="2" width="28" height="28" rx="8" stroke="url(#lg)" stroke-width="2.5" />
+                        <path d="M10 16L14 20L22 12" stroke="url(#lg)" stroke-width="2.5" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                        <defs>
+                            <linearGradient id="lg" x1="0" y1="0" x2="32" y2="32">
+                                <stop stop-color="#6366f1" />
+                                <stop offset="1" stop-color="#06b6d4" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <span class="logo-text">SuperAuth</span>
+                <span class="logo-badge">V2</span>
+            </div>
+
+            <nav class="nav-tabs" id="nav-tabs">
+                <!-- Always visible -->
+                <button class="nav-tab active" data-tab="dashboard" id="nav-dashboard">Dashboard</button>
+                <!-- User only -->
+                <button class="nav-tab" data-tab="request" id="nav-request" style="display:none;">Request</button>
+                <!-- Authority only -->
+                <button class="nav-tab" data-tab="inbox" id="nav-inbox" style="display:none;">Inbox <span
+                        id="inbox-count" class="tab-badge" style="display:none;">0</span></button>
+                <button class="nav-tab" data-tab="manage" id="nav-manage" style="display:none;">Manage</button>
+                <!-- Government only -->
+                <button class="nav-tab" data-tab="authorities" id="nav-authorities" style="display:none;">Set
+                    Authorities</button>
+                <!-- Always visible -->
+                <button class="nav-tab" data-tab="verify" id="nav-verify">Verify</button>
+            </nav>
+
+            <div class="header-actions">
+                <div id="role-badge" class="role-badge" style="display:none;">
+                    <span id="role-icon">👤</span>
+                    <span id="role-label">User</span>
+                </div>
+                <div class="network-badge" id="network-badge">
+                    <span class="network-dot"></span>
+                    <span id="network-name">Not Connected</span>
+                </div>
+                <button class="btn-connect" id="btn-connect">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    <span id="btn-connect-text">Connect Wallet</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══ MAIN ═══ -->
+    <main id="app-main">
+
+        <!-- ─── DASHBOARD ─── -->
+        <section class="tab-content active" id="tab-dashboard">
+            <div class="section-header">
+                <h1 id="dashboard-title">My Credentials</h1>
+                <p id="dashboard-subtitle">Connect your wallet to view credentials</p>
+            </div>
+
+            <div class="stats-row" id="stats-row">
+                <div class="stat-card">
+                    <div class="stat-icon stat-icon-total"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                        </svg></div>
+                    <div class="stat-data"><span class="stat-value" id="stat-total">—</span><span
+                            class="stat-label">Total</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon stat-icon-valid"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                            <polyline points="22 4 12 14.01 9 11.01" />
+                        </svg></div>
+                    <div class="stat-data"><span class="stat-value" id="stat-valid">—</span><span
+                            class="stat-label">Valid</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon stat-icon-revoked"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="15" y1="9" x2="9" y2="15" />
+                            <line x1="9" y1="9" x2="15" y2="15" />
+                        </svg></div>
+                    <div class="stat-data"><span class="stat-value" id="stat-revoked">—</span><span
+                            class="stat-label">Revoked</span></div>
+                </div>
+            </div>
+
+            <div class="credential-list" id="credential-list">
+                <div class="empty-state" id="empty-state">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                        opacity="0.4">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    <p>Connect your Pelagus wallet to view credentials</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── REQUEST (User only) ─── -->
+        <section class="tab-content" id="tab-request">
+            <div class="section-header">
+                <h1>Request Credential</h1>
+                <p>Submit a request to an authority — they'll review and sign it on-chain</p>
+            </div>
+
+            <div class="info-banner">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+                <span>Credentials can only be issued or modified by registered authorities. Submit your request below —
+                    it will appear in the authority's inbox for review and approval.</span>
+            </div>
+
+            <!-- New credential request -->
+            <div class="form-card">
+                <h3>📝 New Credential Request</h3>
+                <div class="form-group">
+                    <label for="req-type">Credential Type</label>
+                    <select id="req-type">
+                        <option value="PERSONAL">PERSONAL — Identity</option>
+                        <option value="EDUCATION">EDUCATION — Academic</option>
+                        <option value="EMPLOYMENT">EMPLOYMENT — Work</option>
+                        <option value="MEDICAL">MEDICAL — Health</option>
+                        <option value="FINANCIAL">FINANCIAL — Financial</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="req-action">Request Type</label>
+                    <select id="req-action">
+                        <option value="issue">Issue New Credential</option>
+                        <option value="modify">Modify Existing Credential</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <div style="display:flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
+                        <label for="req-data" style="margin-bottom:0;">Your Data (JSON)</label>
+                        <button type="button" class="btn-link" onclick="tryFormatJson('req-data')">✨ Magic Format</button>
+                    </div>
+                    <textarea id="req-data" rows="6"
+                        placeholder='{ "name": "Your Name", "dob": "1990-01-01", "id_number": "ABC123" }'></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="req-notes">Notes to Authority <span class="label-hint">(optional)</span></label>
+                    <textarea id="req-notes" rows="2" placeholder="Any context for the authority..."></textarea>
+                </div>
+                <button class="btn-primary btn-full" id="btn-submit-request" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                    Submit Request
+                </button>
+            </div>
+
+            <!-- My requests history -->
+            <div class="form-card" style="margin-top: 24px;">
+                <h3>📬 My Requests</h3>
+                <div id="my-requests-list">
+                    <p style="color: var(--text-muted); font-size:0.85rem;">No requests yet.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── INBOX (Authority only) ─── -->
+        <section class="tab-content" id="tab-inbox">
+            <div class="section-header">
+                <h1>🔐 Authority Inbox</h1>
+                <p>Pending credential requests from users — review, accept, and sign</p>
+            </div>
+
+            <div class="info-banner authority-banner">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span>When you accept a request, you'll sign the credential with your authority key and submit the
+                    transaction on-chain. Rejected requests are marked and the user is notified.</span>
+            </div>
+
+            <div id="inbox-list">
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                        opacity="0.4">
+                        <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+                        <path
+                            d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+                    </svg>
+                    <p>No pending requests</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── MANAGE (Authority only) ─── -->
+        <section class="tab-content" id="tab-manage">
+            <div class="section-header">
+                <h1>🔐 Manage Credentials</h1>
+                <p>Look up, update, or revoke any user's credentials</p>
+            </div>
+
+            <!-- Lookup -->
+            <div class="form-card">
+                <h3>🔍 Look Up Credential</h3>
+                <div class="lookup-bar">
+                    <div class="form-group" style="flex:1;">
+                        <label for="manage-user">User Wallet</label>
+                        <input type="text" id="manage-user" placeholder="0x..." />
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label for="manage-type">Credential Type</label>
+                        <select id="manage-type">
+                            <option value="PERSONAL">PERSONAL</option>
+                            <option value="EDUCATION">EDUCATION</option>
+                            <option value="EMPLOYMENT">EMPLOYMENT</option>
+                            <option value="MEDICAL">MEDICAL</option>
+                            <option value="FINANCIAL">FINANCIAL</option>
+                        </select>
+                    </div>
+                    <button class="btn-primary" id="btn-manage-lookup" disabled>Lookup</button>
+                </div>
+            </div>
+
+            <div id="manage-result" class="hidden"></div>
+
+            <!-- Issue credential directly -->
+            <div class="form-card" style="margin-top:20px;" id="issue-section">
+                <h3>📄 Issue New Credential</h3>
+                <div class="form-group">
+                    <label for="issue-user">User Wallet Address</label>
+                    <input type="text" id="issue-user" placeholder="0x..." />
+                </div>
+                <div class="form-group">
+                    <label for="issue-type">Credential Type</label>
+                    <select id="issue-type">
+                        <option value="PERSONAL">PERSONAL</option>
+                        <option value="EDUCATION">EDUCATION</option>
+                        <option value="EMPLOYMENT">EMPLOYMENT</option>
+                        <option value="MEDICAL">MEDICAL</option>
+                        <option value="FINANCIAL">FINANCIAL</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <div style="display:flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
+                        <label for="issue-data" style="margin-bottom:0;">Credential Data (JSON)</label>
+                        <button type="button" class="btn-link" onclick="tryFormatJson('issue-data')">✨ Magic Format</button>
+                    </div>
+                    <textarea id="issue-data" rows="6"
+                        placeholder='{ "name": "John Doe", "dob": "1990-01-01" }'></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="issue-ipfs">IPFS CID <span class="label-hint">(auto-pin or paste existing
+                            CID)</span></label>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="text" id="issue-ipfs" placeholder="QmXx... (auto-filled on pin)" style="flex:1;" />
+                        <button type="button" class="btn-pin" onclick="handleAutoPin('issue-data','issue-ipfs')">📌 Pin
+                            to IPFS</button>
+                    </div>
+                </div>
+                <button class="btn-primary btn-full" id="btn-issue" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    Sign & Issue Credential
+                </button>
+            </div>
+
+            <!-- Update form (shown after lookup) -->
+            <div id="update-section" class="form-card hidden" style="margin-top:20px;">
+                <h3>✏️ Update Credential</h3>
+                <div class="form-group">
+                    <div style="display:flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
+                        <label for="update-data" style="margin-bottom:0;">New Credential Data (JSON)</label>
+                        <button type="button" class="btn-link" onclick="tryFormatJson('update-data')">✨ Magic Format</button>
+                    </div>
+                    <textarea id="update-data" rows="6" placeholder='{ "updated data" }'></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="update-ipfs">New IPFS CID</label>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="text" id="update-ipfs" placeholder="QmXx..." style="flex:1;" />
+                        <button type="button" class="btn-pin" onclick="handleAutoPin('update-data','update-ipfs')">📌
+                            Pin to IPFS</button>
+                    </div>
+                </div>
+                <button class="btn-primary btn-full" id="btn-update">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="16 3 21 3 21 8" />
+                        <line x1="4" y1="20" x2="21" y2="3" />
+                    </svg>
+                    Sign & Update
+                </button>
+            </div>
+
+            <!-- Revoke form (shown after lookup) -->
+            <div id="revoke-section" class="form-card hidden"
+                style="margin-top:20px; border-color: rgba(239,68,68,0.3);">
+                <h3 style="color:#ef4444;">⛔ Revoke Credential</h3>
+                <div class="form-group">
+                    <label for="revoke-reason">Reason</label>
+                    <input type="text" id="revoke-reason" placeholder="Reason for revocation..." />
+                </div>
+                <button class="btn-danger btn-full" id="btn-revoke">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="15" y1="9" x2="9" y2="15" />
+                        <line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                    Revoke Credential
+                </button>
+            </div>
+        </section>
+
+        <!-- ─── SET AUTHORITIES (Government only) ─── -->
+        <section class="tab-content" id="tab-authorities">
+            <div class="section-header">
+                <h1>🏛️ Manage Authorities</h1>
+                <p>Assign which wallet can issue which credential type</p>
+            </div>
+
+            <div class="info-banner" style="background: rgba(245,158,11,0.06); border-color: rgba(245,158,11,0.2);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-amber)"
+                    stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span>Only the government wallet can assign authorities. Each credential type has <strong>one</strong>
+                    designated authority. Setting a new authority replaces the previous one.</span>
+            </div>
+
+            <!-- Current authorities -->
+            <div class="form-card">
+                <h3>📋 Current Authority Assignments</h3>
+                <div id="authority-list">
+                    <p style="color: var(--text-muted); font-size:0.85rem;">Loading...</p>
+                </div>
+            </div>
+
+            <!-- Set authority form -->
+            <div class="form-card" style="margin-top:20px;">
+                <h3>🔑 Assign Authority</h3>
+                <div class="form-group">
+                    <label for="set-auth-type">Credential Type</label>
+                    <select id="set-auth-type">
+                        <option value="PERSONAL">PERSONAL</option>
+                        <option value="EDUCATION">EDUCATION</option>
+                        <option value="EMPLOYMENT">EMPLOYMENT</option>
+                        <option value="MEDICAL">MEDICAL</option>
+                        <option value="FINANCIAL">FINANCIAL</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="set-auth-address">Authority Wallet Address</label>
+                    <input type="text" id="set-auth-address" placeholder="0x..." />
+                </div>
+                <button class="btn-primary btn-full" id="btn-set-authority" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                    Set Authority
+                </button>
+            </div>
+        </section>
+
+        <!-- ─── VERIFY (Always visible) ─── -->
+        <section class="tab-content" id="tab-verify">
+            <div class="section-header">
+                <h1>Verify Credentials</h1>
+                <p>Anyone can verify — no wallet connection required</p>
+            </div>
+
+            <!-- Status check -->
+            <div class="form-card">
+                <h3>✅ Check Credential Status</h3>
+                <div class="lookup-bar">
+                    <div class="form-group" style="flex:1;">
+                        <label for="verify-user">Wallet Address</label>
+                        <input type="text" id="verify-user" placeholder="0x..." />
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label for="verify-type">Credential Type</label>
+                        <select id="verify-type">
+                            <option value="PERSONAL">PERSONAL</option>
+                            <option value="EDUCATION">EDUCATION</option>
+                            <option value="EMPLOYMENT">EMPLOYMENT</option>
+                            <option value="MEDICAL">MEDICAL</option>
+                            <option value="FINANCIAL">FINANCIAL</option>
+                        </select>
+                    </div>
+                    <button class="btn-primary" id="btn-verify">Verify</button>
+                </div>
+            </div>
+            <div id="verify-result" class="hidden"></div>
+
+            <!-- Hash verification -->
+            <div class="form-card" style="margin-top:24px;">
+                <h3>🔒 Verify Data Hash</h3>
+                <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:16px;">Paste raw JSON data to
+                    verify it matches the on-chain hash</p>
+                <div class="lookup-bar">
+                    <div class="form-group" style="flex:1;">
+                        <label for="verify-hash-user">Wallet Address</label>
+                        <input type="text" id="verify-hash-user" placeholder="0x..." />
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label for="verify-hash-type">Credential Type</label>
+                        <select id="verify-hash-type">
+                            <option value="PERSONAL">PERSONAL</option>
+                            <option value="EDUCATION">EDUCATION</option>
+                            <option value="EMPLOYMENT">EMPLOYMENT</option>
+                            <option value="MEDICAL">MEDICAL</option>
+                            <option value="FINANCIAL">FINANCIAL</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div style="display:flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
+                        <label for="verify-hash-data" style="margin-bottom:0;">Raw Data (JSON)</label>
+                        <button type="button" class="btn-link" onclick="tryFormatJson('verify-hash-data')">✨ Magic Format</button>
+                    </div>
+                    <textarea id="verify-hash-data" rows="4" placeholder='{ "name": "John Doe", ... }'></textarea>
+                </div>
+                <button class="btn-primary btn-full" id="btn-verify-hash">Verify Hash Integrity</button>
+                <div id="verify-hash-result" class="hidden" style="margin-top:16px;"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Toast & Modal -->
+    <div id="toast-container"></div>
+    <div class="modal-overlay hidden" id="modal-overlay">
+        <div class="modal-card" id="modal-card">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="contract.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
