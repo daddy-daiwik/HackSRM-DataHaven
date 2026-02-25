@@ -797,6 +797,78 @@ app.get('/api/health', (req, res) => {
         wallet: viemAddress || 'not configured',
     });
 });
+// ═══════════════════════════════════════════════════════════
+// REQUEST QUEUE — Server-side shared store
+// ═══════════════════════════════════════════════════════════
+const REQUESTS_FILE = path.join(DATAHAVEN_DIR, '_requests.json');
+let requestQueue = [];
+try {
+    if (fs.existsSync(REQUESTS_FILE)) {
+        requestQueue = JSON.parse(fs.readFileSync(REQUESTS_FILE, 'utf8'));
+    }
+} catch { /* start fresh */ }
+
+function saveRequestQueue() {
+    fs.writeFileSync(REQUESTS_FILE, JSON.stringify(requestQueue, null, 2), 'utf8');
+}
+
+// Submit a new request
+app.post('/api/requests', (req, res) => {
+    try {
+        const { requester, credentialType, typeHash, action, rawData, dataHash, notes } = req.body;
+        if (!requester || !credentialType || !rawData) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+        const newReq = {
+            id: 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+            timestamp: new Date().toISOString(),
+            requester,
+            credentialType,
+            typeHash: typeHash || '',
+            action: action || 'issue',
+            rawData,
+            dataHash: dataHash || '',
+            notes: notes || '',
+            status: 'pending'
+        };
+        requestQueue.push(newReq);
+        saveRequestQueue();
+        console.log(`📨 New request: ${newReq.id} from ${requester} for ${credentialType}`);
+        res.json({ success: true, request: newReq });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Get requests (optionally filter by status, requester, or credentialType)
+app.get('/api/requests', (req, res) => {
+    try {
+        let results = [...requestQueue];
+        if (req.query.status) results = results.filter(r => r.status === req.query.status);
+        if (req.query.requester) results = results.filter(r => r.requester.toLowerCase() === req.query.requester.toLowerCase());
+        if (req.query.type) results = results.filter(r => r.credentialType === req.query.type);
+        res.json({ success: true, requests: results });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Update a request status (accept/reject)
+app.patch('/api/requests/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, txHash } = req.body;
+        const reqItem = requestQueue.find(r => r.id === id);
+        if (!reqItem) return res.status(404).json({ success: false, error: 'Request not found' });
+        if (status) reqItem.status = status;
+        if (txHash) reqItem.txHash = txHash;
+        saveRequestQueue();
+        console.log(`📨 Request ${id} updated: ${status}`);
+        res.json({ success: true, request: reqItem });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 // Catch-all for SPA (Express v5 requires named splat param)
 app.get('{*path}', (req, res) => {

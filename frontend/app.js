@@ -413,22 +413,40 @@ async function showCredentialDetail(user, typeHash, typeName) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// REQUEST SYSTEM — localStorage-based queue
+// REQUEST SYSTEM — Server-backed shared queue
 // ═══════════════════════════════════════════════════════════
 
-function getRequests() {
-    try { return JSON.parse(localStorage.getItem(REQUESTS_KEY) || '[]'); }
-    catch { return []; }
+async function getRequests(filters = {}) {
+    try {
+        const params = new URLSearchParams(filters);
+        const resp = await fetch(BACKEND_BASE + '/api/requests?' + params.toString(), { signal: AbortSignal.timeout(10000) });
+        if (resp.ok) {
+            const data = await resp.json();
+            return data.requests || [];
+        }
+    } catch (e) {
+        console.warn('Failed to fetch requests:', e.message);
+    }
+    return [];
 }
-function saveRequests(reqs) {
-    localStorage.setItem(REQUESTS_KEY, JSON.stringify(reqs));
+
+async function updateRequestStatus(reqId, status, txHash) {
+    try {
+        await fetch(BACKEND_BASE + '/api/requests/' + reqId, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status, txHash }),
+        });
+    } catch (e) {
+        console.warn('Failed to update request:', e.message);
+    }
 }
 
 function initRequestPage() {
     document.getElementById('btn-submit-request').addEventListener('click', handleSubmitRequest);
 }
 
-function handleSubmitRequest() {
+async function handleSubmitRequest() {
     if (!connectedAddress) { showToast('Connect wallet first', 'error'); return; }
 
     const typeVal = document.getElementById('req-type').value;
@@ -448,38 +466,39 @@ function handleSubmitRequest() {
     const dataHash = ethers.keccak256(ethers.toUtf8Bytes(dataStr));
     const typeHash = ethers.keccak256(ethers.toUtf8Bytes(typeVal));
 
-    const req = {
-        id: 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
-        timestamp: new Date().toISOString(),
-        requester: connectedAddress,
-        credentialType: typeVal,
-        typeHash: typeHash,
-        action: action,
-        rawData: dataStr,
-        dataHash: dataHash,
-        notes: notes,
-        status: 'pending'
-    };
-
-    const reqs = getRequests();
-    reqs.push(req);
-    saveRequests(reqs);
-
-    showToast(`Request submitted! It will appear in the ${typeVal} authority's inbox.`, 'success');
-
-    // Clear form
-    document.getElementById('req-data').value = '';
-    document.getElementById('req-notes').value = '';
-
-    // Refresh user's request list
-    renderMyRequests();
+    try {
+        const resp = await fetch(BACKEND_BASE + '/api/requests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                requester: connectedAddress,
+                credentialType: typeVal,
+                typeHash: typeHash,
+                action: action,
+                rawData: dataStr,
+                dataHash: dataHash,
+                notes: notes,
+            }),
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showToast(`Request submitted! It will appear in the ${typeVal} authority's inbox.`, 'success');
+            document.getElementById('req-data').value = '';
+            document.getElementById('req-notes').value = '';
+            await renderMyRequests();
+        } else {
+            showToast('Submit failed: ' + (result.error || 'Unknown'), 'error');
+        }
+    } catch (err) {
+        showToast('Failed to submit request: ' + err.message, 'error');
+    }
 }
 
-function renderMyRequests() {
+async function renderMyRequests() {
     const container = document.getElementById('my-requests-list');
     if (!connectedAddress) { container.innerHTML = '<p style="color:var(--text-muted);">Connect wallet to see requests.</p>'; return; }
 
-    const reqs = getRequests().filter(r => r.requester.toLowerCase() === connectedAddress.toLowerCase());
+    const reqs = await getRequests({ requester: connectedAddress });
 
     if (reqs.length === 0) {
         container.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;">No requests submitted yet.</p>';
@@ -507,12 +526,10 @@ function renderMyRequests() {
 // INBOX — Authority sees pending requests
 // ═══════════════════════════════════════════════════════════
 
-function loadInbox() {
+async function loadInbox() {
     const container = document.getElementById('inbox-list');
-    const reqs = getRequests().filter(r => {
-        // Show requests for credential types this authority manages
-        return r.status === 'pending' && authorityTypes.includes(r.credentialType);
-    });
+    const allReqs = await getRequests({ status: 'pending' });
+    const reqs = allReqs.filter(r => authorityTypes.includes(r.credentialType));
 
     // Update badge count
     const badge = document.getElementById('inbox-count');
@@ -564,8 +581,8 @@ function loadInbox() {
 async function handleAcceptRequest(reqId) {
     if (!contract || !signer) { showToast('Connect wallet', 'error'); return; }
 
-    const reqs = getRequests();
-    const req = reqs.find(r => r.id === reqId);
+    const allReqs = await getRequests();
+    const req = allReqs.find(r => r.id === reqId);
     if (!req) { showToast('Request not found', 'error'); return; }
 
     const cardEl = document.getElementById('inbox-' + reqId);
@@ -588,7 +605,6 @@ async function handleAcceptRequest(reqId) {
 
         let tx;
         if (req.action === 'issue') {
-            // Store data in DataHaven
             let dataHavenId = 'none';
             try {
                 const parsed = JSON.parse(req.rawData);
@@ -596,13 +612,11 @@ async function handleAcceptRequest(reqId) {
                 if (id) dataHavenId = id;
             } catch (e) { console.warn('DataHaven store skipped:', e.message); }
 
-
             tx = await contract.issueCredentialV2(
                 req.requester, credentialTypeHash, credentialHash, dataHavenId,
                 sig.v, sig.r, sig.s
             );
         } else {
-            // Modify/update existing
             let newDataHavenId = 'none';
             try {
                 const parsed = JSON.parse(req.rawData);
@@ -619,35 +633,30 @@ async function handleAcceptRequest(reqId) {
         showToast('Tx sent: ' + tx.hash.slice(0, 14) + '...', 'info');
         await tx.wait();
 
-        // Mark accepted
-        req.status = 'accepted';
-        req.txHash = tx.hash;
-        req.respondedAt = new Date().toISOString();
-        saveRequests(reqs);
+        // Update status on server
+        await updateRequestStatus(reqId, 'accepted', tx.hash);
 
         showToast(`Credential ${req.action === 'issue' ? 'issued' : 'updated'} successfully!`, 'success');
-        loadInbox();
+        await loadInbox();
 
     } catch (err) {
         console.error(err);
         showToast('Failed: ' + (err.reason || err.message || err), 'error');
-        loadInbox(); // Reset UI
+        await loadInbox();
     }
 }
 
-function handleRejectRequest(reqId) {
-    const reqs = getRequests();
-    const req = reqs.find(r => r.id === reqId);
+async function handleRejectRequest(reqId) {
+    const allReqs = await getRequests();
+    const req = allReqs.find(r => r.id === reqId);
     if (!req) return;
 
     if (!confirm('Reject this request from ' + req.requester.slice(0, 10) + '...?')) return;
 
-    req.status = 'rejected';
-    req.respondedAt = new Date().toISOString();
-    saveRequests(reqs);
+    await updateRequestStatus(reqId, 'rejected');
 
     showToast('Request rejected', 'info');
-    loadInbox();
+    await loadInbox();
 }
 
 // ═══════════════════════════════════════════════════════════
