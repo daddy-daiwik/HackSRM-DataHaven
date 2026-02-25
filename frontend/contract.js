@@ -221,5 +221,6 @@ const CREDENTIAL_ICONS = {
   FINANCIAL: '🏦',
 };
 
-// DataHaven backend URL for viewing raw data
-const DATAHAVEN_BACKEND = 'http://localhost:3001/api/datahaven/retrieve/';
+// DataHaven backend URL — auto-detect from current origin (works locally & deployed)
+const BACKEND_BASE = window.location.origin;
+const DATAHAVEN_BACKEND = BACKEND_BASE + '/api/datahaven/retrieve/';

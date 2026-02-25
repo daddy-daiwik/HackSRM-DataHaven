@@ -367,7 +367,7 @@ async function showCredentialDetail(user, typeHash, typeName) {
 
         const histHtml = `<div class="history-timeline">${historyItems}</div>`;
 
-        const dataHavenLink = isValidDataHavenId(dataHavenId) ? ` <a href="http://localhost:3001/api/datahaven/retrieve/${dataHavenId}" target="_blank" class="ipfs-link">📦 View DataHaven →</a>` : '';
+        const dataHavenLink = isValidDataHavenId(dataHavenId) ? ` <a href="${BACKEND_BASE}/api/datahaven/retrieve/${dataHavenId}" target="_blank" class="ipfs-link">📦 View DataHaven →</a>` : '';
 
         openModal(`
             <h2>${getTypeIcon(typeName)} ${typeName}</h2>
@@ -1003,14 +1003,14 @@ function isValidDataHavenId(id) {
 function formatDataHavenDisplay(id) {
     if (isValidDataHavenId(id)) {
         const shortId = id.length > 12 ? id.slice(0, 8) + '…' + id.slice(-4) : id;
-        return `<a href="http://localhost:3001/api/datahaven/retrieve/${encodeURIComponent(id)}" target="_blank" style="color:var(--accent-cyan);text-decoration:underline;">${shortId}</a>`;
+        return `<a href="${BACKEND_BASE}/api/datahaven/retrieve/${encodeURIComponent(id)}" target="_blank" style="color:var(--accent-cyan);text-decoration:underline;">${shortId}</a>`;
     }
     return '<span style="color:var(--text-muted);">Not stored</span>';
 }
 
 async function checkDataHavenHealth() {
     try {
-        const resp = await fetch('http://localhost:3001/api/datahaven/health', { signal: AbortSignal.timeout(5000) });
+        const resp = await fetch(BACKEND_BASE + '/api/datahaven/health', { signal: AbortSignal.timeout(5000) });
         if (resp.ok) {
             const data = await resp.json();
             dataHavenStatus = data.sdkReady ? 'online' : 'local-only';
@@ -1028,7 +1028,7 @@ async function storeInDataHaven(jsonData, retries = 2) {
     let lastErr;
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
-            const resp = await fetch('http://localhost:3001/api/datahaven/store', {
+            const resp = await fetch(BACKEND_BASE + '/api/datahaven/store', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ data: jsonData }),
@@ -1048,7 +1048,7 @@ async function storeInDataHaven(jsonData, retries = 2) {
             console.warn(`DataHaven store attempt ${attempt + 1} failed:`, err.message);
             if (attempt < retries) {
                 // Try re-auth before retry
-                try { await fetch('http://localhost:3001/api/datahaven/reauth', { method: 'POST' }); } catch { }
+                try { await fetch(BACKEND_BASE + '/api/datahaven/reauth', { method: 'POST' }); } catch { }
                 await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
             }
         }
