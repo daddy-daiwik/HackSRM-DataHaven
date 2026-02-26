@@ -1,8 +1,8 @@
-# DataHaven: Unhackable Citizen Identity & Credential System
+# CredVault: Unhackable Citizen Identity & Credential System
 
 **Built by Team Daddy's Island**
 
-DataHaven is a blockchain-based solution built on the **Quai Network** designed to create, modify, store, and verify all information about a citizen—from birth till death—in a completely tamper-proof and trustless manner.
+CredVault is a blockchain-based solution built on the **Quai Network** designed to create, modify, store, and verify all information about a citizen—from birth till death—in a completely tamper-proof and trustless manner.
 
 ---
 
@@ -21,7 +21,7 @@ This is just the tip of the iceberg. The root cause is always the same: **Centra
 
 ## 💡 The Solution
 
-To tackle all these problems at once, we built **DataHaven**. Everything a citizen does or achieves—from medical records to criminal history—is hashed, signed, and stored securely on-chain. 
+To tackle all these problems at once, we built **CredVault**. Everything a citizen does or achieves—from medical records to criminal history—is hashed, signed, and stored securely on-chain. 
 
 No one can modify or read the state of the blockchain without proper administrative permissions, ensuring absolute data integrity.
 
@@ -48,6 +48,7 @@ By validating data using blockchain cryptography, all the current shortcomings o
 ## 🛠️ Tech Stack
 
 - **Blockchain**: Quai Network (Cyprus-1 Testnet)
+- **Storage**: Datahaven
 - **Smart Contracts**: Solidity ^0.8.26
 - **Backend / Storage**: Node.js, Express, DataHaven (StorageHub SDK)
 - **Frontend**: Vanilla HTML/CSS/JS, ethers.js, MetaMask
@@ -55,6 +56,3 @@ By validating data using blockchain cryptography, all the current shortcomings o
 
 ---
 
-## 🚀 Getting Started
-
-Read the full technical breakdown in our [ARCHITECTURE.md](ARCHITECTURE.md).
